@@ -412,77 +412,61 @@ class DecoderRNN(nn.Module):
         else:
             return result
 
-######################################################################
-# I encourage you to train and observe the results of this model, but to
-# save space we'll be going straight for the gold and introducing the
-# Attention Mechanism.
-#
 
 
 ######################################################################
 # Attention Decoder
 # ^^^^^^^^^^^^^^^^^
-#
-# If only the context vector is passed betweeen the encoder and decoder,
-# that single vector carries the burden of encoding the entire sentence.
-#
-# Attention allows the decoder network to "focus" on a different part of
-# the encoder's outputs for every step of the decoder's own outputs. First
-# we calculate a set of *attention weights*. These will be multiplied by
-# the encoder output vectors to create a weighted combination. The result
-# (called ``attn_applied`` in the code) should contain information about
-# that specific part of the input sequence, and thus help the decoder
-# choose the right output words.
-#
-# .. figure:: https://i.imgur.com/1152PYf.png
-#    :alt:
-#
-# Calculating the attention weights is done with another feed-forward
-# layer ``attn``, using the decoder's input and hidden state as inputs.
-# Because there are sentences of all sizes in the training data, to
-# actually create and train this layer we have to choose a maximum
-# sentence length (input length, for encoder outputs) that it can apply
-# to. Sentences of the maximum length will use all the attention weights,
-# while shorter sentences will only use the first few.
-#
-# .. figure:: /_static/img/seq-seq-images/attention-decoder-network.png
-#    :alt:
-#
-#
 
 class AttnDecoderRNN(nn.Module):
-    def __init__(self, hidden_size, output_size, n_layers=1, dropout_p=0.1, max_length=MAX_LENGTH):
+    def __init__(self, hidden_size, output_size, n_layers=1, dropout_p=0.1, max_length=MAX_LENGTH, conv_size=4):
+        
         super(AttnDecoderRNN, self).__init__()
         self.hidden_size = hidden_size
         self.output_size = output_size
         self.n_layers = n_layers
         self.dropout_p = dropout_p
         self.max_length = max_length
+        self.conv_size = conv_size
 
-        self.embedding = nn.Embedding(self.output_size, self.hidden_size)
-        self.attn = nn.Linear(self.hidden_size * 2, self.max_length)
-        self.attn_combine = nn.Linear(self.hidden_size * 2, self.hidden_size)
+        self.conv1 = nn.Conv1d(1, 1, self.conv_size, padding=self.conv_size-2)
+        self.embedding = nn.Embedding(self.output_size, self.hidden_size//2)
+        self.attn = nn.Linear(self.hidden_size, self.max_length)
+        self.attn_combine = nn.Linear(self.hidden_size + 128, self.hidden_size)
         self.dropout = nn.Dropout(self.dropout_p)
-        self.gru = nn.GRU(self.hidden_size, self.hidden_size)
-        self.out = nn.Linear(self.hidden_size, self.output_size)
+        self.gru = nn.GRU(self.hidden_size, self.hidden_size//2)
+        self.out = nn.Linear(self.hidden_size//2, self.output_size)
+        self.h2h = nn.Linear(128, 256)
 
     def forward(self, input, hidden, encoder_outputs):
+        #print(hidden[0][0])
+
+        hidden = F.max_pool1d(F.relu(self.conv1(hidden)), 2)
+        #print(hidden)
+        #hidden = hidden.
+        
         embedded = self.embedding(input).view(1, 1, -1)
         embedded = self.dropout(embedded)
-
+        
         attn_weights = F.softmax(
             self.attn(torch.cat((embedded[0], hidden[0]), 1)), dim=1)
         attn_applied = torch.bmm(attn_weights.unsqueeze(0),
                                  encoder_outputs.unsqueeze(0))
 
         output = torch.cat((embedded[0], attn_applied[0]), 1)
+        #print(output.size())
         output = self.attn_combine(output).unsqueeze(0)
-
+        #print(output.size())
+        
         for i in range(self.n_layers):
             output = F.relu(output)
             output, hidden = self.gru(output, hidden)
-
+        #print(output.size())
+        #print(hidden.size())
         output = F.log_softmax(self.out(output[0]), dim=1)
+        hidden = self.h2h(hidden)
+        hidden = self.dropout(hidden)
+        #print(hidden.size())
         return output, hidden, attn_weights
 
     def initHidden(self):
@@ -804,9 +788,10 @@ def evaluateRandomly(encoder, decoder, n=10):
 #
 
 hidden_size = 256
+conv_size = 4
 encoder1 = EncoderRNN(input_lang.n_words, hidden_size)
 attn_decoder1 = AttnDecoderRNN(hidden_size, output_lang.n_words,
-                               1, dropout_p=0.1)
+                               1, dropout_p=0.1, conv_size=conv_size)
 
 if use_cuda:
     encoder1 = encoder1.cuda()
