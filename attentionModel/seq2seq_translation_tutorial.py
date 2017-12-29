@@ -1,94 +1,11 @@
 # -*- coding: utf-8 -*-
-"""
-Translation with a Sequence to Sequence Network and Attention
-*************************************************************
-**Author**: `Sean Robertson <https://github.com/spro/practical-pytorch>`_
-
-In this project we will be teaching a neural network to translate from
-French to English.
-
-::
-
-    [KEY: > input, = target, < output]
-
-    > il est en train de peindre un tableau .
-    = he is painting a picture .
-    < he is painting a picture .
-
-    > pourquoi ne pas essayer ce vin delicieux ?
-    = why not try that delicious wine ?
-    < why not try that delicious wine ?
-
-    > elle n est pas poete mais romanciere .
-    = she is not a poet but a novelist .
-    < she not not a poet but a novelist .
-
-    > vous etes trop maigre .
-    = you re too skinny .
-    < you re all alone .
-
-... to varying degrees of success.
-
-This is made possible by the simple but powerful idea of the `sequence
-to sequence network <http://arxiv.org/abs/1409.3215>`__, in which two
-recurrent neural networks work together to transform one sequence to
-another. An encoder network condenses an input sequence into a vector,
-and a decoder network unfolds that vector into a new sequence.
-
-.. figure:: /_static/img/seq-seq-images/seq2seq.png
-   :alt:
-
-To improve upon this model we'll use an `attention
-mechanism <https://arxiv.org/abs/1409.0473>`__, which lets the decoder
-learn to focus over a specific range of the input sequence.
-
-**Recommended Reading:**
-
-I assume you have at least installed PyTorch, know Python, and
-understand Tensors:
-
--  http://pytorch.org/ For installation instructions
--  :doc:`/beginner/deep_learning_60min_blitz` to get started with PyTorch in general
--  :doc:`/beginner/pytorch_with_examples` for a wide and deep overview
--  :doc:`/beginner/former_torchies_tutorial` if you are former Lua Torch user
-
-
-It would also be useful to know about Sequence to Sequence networks and
-how they work:
-
--  `Learning Phrase Representations using RNN Encoder-Decoder for
-   Statistical Machine Translation <http://arxiv.org/abs/1406.1078>`__
--  `Sequence to Sequence Learning with Neural
-   Networks <http://arxiv.org/abs/1409.3215>`__
--  `Neural Machine Translation by Jointly Learning to Align and
-   Translate <https://arxiv.org/abs/1409.0473>`__
--  `A Neural Conversational Model <http://arxiv.org/abs/1506.05869>`__
-
-You will also find the previous tutorials on
-:doc:`/intermediate/char_rnn_classification_tutorial`
-and :doc:`/intermediate/char_rnn_generation_tutorial`
-helpful as those concepts are very similar to the Encoder and Decoder
-models, respectively.
-
-And for more, read the papers that introduced these topics:
-
--  `Learning Phrase Representations using RNN Encoder-Decoder for
-   Statistical Machine Translation <http://arxiv.org/abs/1406.1078>`__
--  `Sequence to Sequence Learning with Neural
-   Networks <http://arxiv.org/abs/1409.3215>`__
--  `Neural Machine Translation by Jointly Learning to Align and
-   Translate <https://arxiv.org/abs/1409.0473>`__
--  `A Neural Conversational Model <http://arxiv.org/abs/1506.05869>`__
-
-
-**Requirements**
-"""
 from __future__ import unicode_literals, print_function, division
 from io import open
 import unicodedata
 import string
 import re
 import random
+import sys
 
 import torch
 import torch.nn as nn
@@ -97,6 +14,7 @@ from torch import optim
 import torch.nn.functional as F
 
 use_cuda = torch.cuda.is_available()
+#use_cuda = False
 
 ######################################################################
 # Loading data files
@@ -787,17 +705,32 @@ def evaluateRandomly(encoder, decoder, n=10):
 #    encoder and decoder are initialized and run ``trainIters`` again.
 #
 
-hidden_size = 256
-conv_size = 4
-encoder1 = EncoderRNN(input_lang.n_words, hidden_size)
-attn_decoder1 = AttnDecoderRNN(hidden_size, output_lang.n_words,
+
+if __name__ == '__main__':
+    #print(sys.argv)
+    #input_lang, output_lang, pairs = prepareData('eng', 'fra', True)
+    if len(sys.argv) == 1:
+        hidden_size = 256
+        conv_size = 4
+        encoder1 = EncoderRNN(input_lang.n_words, hidden_size)
+        attn_decoder1 = AttnDecoderRNN(hidden_size, output_lang.n_words,
                                1, dropout_p=0.1, conv_size=conv_size)
-
-if use_cuda:
-    encoder1 = encoder1.cuda()
-    attn_decoder1 = attn_decoder1.cuda()
-
-trainIters(encoder1, attn_decoder1, 75000, print_every=5000)
+        #decoder = DecoderRNN(hidden_size, output_lang.n_words)
+    else:
+        print('loading models')
+        encoder1 = torch.load('encoder.pt')
+        attn_decoder1 = torch.load('decoder.pt')
+        
+    loss = float('Inf')
+    #evaluateRandomly(encoder1, decoder)
+    if use_cuda:
+        encoder1 = encoder1.cuda()
+        attn_decoder1 = attn_decoder1.cuda()
+    else:
+        encoder1 = encoder1.cpu()
+        attn_decoder1 = attn_decoder1.cpu()
+    trainIters(encoder1, attn_decoder1, 75000, print_every=5000)
+    
 
 ######################################################################
 #
